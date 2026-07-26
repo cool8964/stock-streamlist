@@ -13,40 +13,115 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from scrapers import fetch_all_stock_data, get_robust_session
 
 # -------------------------------------------------------------------------
-# 1. 基礎設定與指定欄位 (包含 RWD 頁面設置)
+# 1. 基礎設定與指定欄位 (包含 RWD 與精緻表格樣式)
 # -------------------------------------------------------------------------
 st.set_page_config(
     layout="wide", 
     page_title="股票數據監控面板",
-    initial_sidebar_state="collapsed"  # 手機端開啟時預設收合側邊欄，釋放閱讀空間
+    initial_sidebar_state="collapsed"
 )
 
-# RWD / 手機與電腦端版型優化 CSS
+# HTML 表格精準樣式控制 (完全無透明度、極淺純明灰底)
 st.markdown("""
     <style>
-    /* 調整主要內容區塊內距，避免手機邊緣太擠 */
     .block-container {
-        padding-top: 1.5rem !important;
-        padding-bottom: 2rem !important;
-        padding-left: 0.8rem !important;
-        padding-right: 0.8rem !important;
+    padding-top: 3.8rem !important;
+    padding-bottom: 2rem !important;
+    padding-left: 0.8rem !important;
+    padding-right: 0.8rem !important;
     }
     
-    /* 針對手機螢幕 (寬度小於 768px) 的自動彈性調整 */
+    .custom-table-container {
+        width: 100%;
+        overflow-x: auto;
+        max-height: 450px;
+        overflow-y: auto;
+        border: 1px solid #dcdcdc;
+        border-radius: 4px;
+        margin-bottom: 1rem;
+    }
+    .custom-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 14px;
+        white-space: nowrap;
+    }
+    
+    /* 🌟 上方兩行標題底色：純色無透明度明灰色 (#f0f0f0) */
+    .custom-table th {
+        position: sticky;
+        top: 0;
+        background-color: #f0f0f0 !important;
+        color: #111111 !important;
+        font-weight: bold !important;
+        border: 1px solid #dcdcdc;
+        padding: 8px 12px;
+        text-align: center;
+        z-index: 2;
+    }
+    .custom-table tr:nth-child(2) th {
+        top: 35px;
+        /* 表頭下方加粗分隔線 */
+        border-bottom: 2.5px solid #333333 !important;
+    }
+    
+    /* 🌟 第一欄左上角「基本日期」標題：純色無透明度灰色 (#e5e5e5) */
+    .custom-table th.sticky-corner {
+        position: sticky;
+        top: 0;
+        left: 0;
+        z-index: 3 !important;
+        background-color: #e5e5e5 !important;
+        /* 日期右側加粗分隔線 */
+        border-right: 2.5px solid #333333 !important;
+    }
+
+    /* 🌟 左側日期欄：純色無透明度極淺灰底 (#f5f5f5) */
+    .custom-table td.date-cell {
+        position: sticky;
+        left: 0;
+        background-color: #f5f5f5 !important;
+        color: #000000 !important;
+        font-weight: bold !important;
+        border: 1px solid #e0e0e0;
+        /* 左側日期右邊加粗分隔線 */
+        border-right: 2.5px solid #333333 !important;
+        padding: 8px 12px;
+        z-index: 1;
+        text-align: center;
+    }
+
+    .custom-table td.value-cell {
+        color: #000000 !important;
+        font-weight: bold !important;
+        border: 1px solid #eeeeee;
+        padding: 8px 12px;
+        text-align: right;
+    }
+    .custom-table td.nodata-cell {
+        color: #888888 !important;
+        font-weight: normal !important;
+        border: 1px solid #eeeeee;
+        padding: 8px 12px;
+        text-align: center;
+    }
+    .custom-table tr:hover td {
+        background-color: #f7f7f7 !important;
+    }
+
     @media (max-width: 768px) {
-        /* 按鈕在手機上自動滿版、易於手指點擊 */
         .stButton button {
             width: 100% !important;
             margin-top: 4px;
             margin-bottom: 4px;
         }
-        /* 調整 Tab 標籤頁字體與間距，避免手機上太寬撐開 */
         .stTabs [data-baseweb="tab"] {
             font-size: 14px !important;
             padding-left: 6px !important;
             padding-right: 6px !important;
         }
-        /* 調整多選下拉選單的高度與字體 */
         .stMultiSelect {
             font-size: 14px !important;
         }
@@ -54,9 +129,10 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# 欄位定義
 COLUMNS = [
-    "日期", "大盤指數", "台指期近一", "大盤成交量", "外資進出", 
-    "法人進出(投信)", "自營商進出", 
+    "日期", "大盤指數", "台指期近一", "大盤成交量", "外資進出", "外資累積進出",
+    "法人進出(投信)", "自營商進出", "三大法人進出", "三大法人累積進出",
     "融資增減", "融資餘額", "借券增減", "借券餘額", "券資比", 
     "外資未平倉", "自營商未平倉", "違約合計總金額", "違約相抵後金額"
 ]
@@ -81,15 +157,27 @@ def get_unit_str(metric_name):
     elif "口" in metric_name or "未平倉" in metric_name: return "口"
     else: return "張"
 
-def format_cell(x):
-    if pd.isna(x) or x == "" or x is None or str(x).strip() in ["", "-", "None"]:
-        return "-"
+def parse_num(val):
+    if pd.isna(val) or val is None: return 0.0
+    val_str = str(val).replace("億", "").replace("張", "").replace("%", "").replace("口", "").replace("百萬", "").replace(",", "").strip()
     try:
-        val_str = str(x).replace("億", "").replace("張", "").replace("%", "").replace("口", "").replace("百萬", "").replace(",", "").strip()
-        val = float(val_str)
-        return f"{val:.2f}"
+        return float(val_str)
     except:
-        return str(x).strip()
+        return 0.0
+
+def format_cell(x):
+    if pd.isna(x) or x is None:
+        return "-"
+    val_raw = str(x).strip()
+    if val_raw in ["", "-", "None", "None 億", "None 張", "None 口"]:
+        return "-"
+    if "無交易數據" in val_raw:
+        return "無交易數據"
+    try:
+        val = parse_num(val_raw)
+        return f"{val:,.2f}"
+    except:
+        return val_raw
 
 def add_weekday_to_date_str(date_str):
     if "(" in date_str:  
@@ -101,7 +189,7 @@ def add_weekday_to_date_str(date_str):
         return date_str
 
 # -------------------------------------------------------------------------
-# 2. 本地端讀寫
+# 2. 本地端讀寫 & 計算外資累積與三大法人合計
 # -------------------------------------------------------------------------
 def local_read_csv():
     if os.path.exists(CACHE_FILE):
@@ -119,8 +207,35 @@ def local_write_csv(df):
         st.error(f"本地檔案寫入失敗: {e}")
         return False
 
+def calculate_institutional_totals(df):
+    if df is None or df.empty:
+        return df
+    
+    df_calc = df.copy()
+    if "日期" in df_calc.columns:
+        df_calc['pure_date'] = df_calc['日期'].apply(lambda x: str(x).split("(")[0])
+        df_calc = df_calc.sort_values(by="pure_date", ascending=True).reset_index(drop=True)
+
+    foreign_list = []
+    total_list = []
+    
+    for _, row in df_calc.iterrows():
+        f = parse_num(row.get("外資進出", 0))
+        i = parse_num(row.get("法人進出(投信)", 0))
+        d = parse_num(row.get("自營商進出", 0))
+        
+        foreign_list.append(f)
+        total_list.append(f + i + d)
+
+    df_calc["外資累積進出"] = [f"{v:.2f}" for v in np.cumsum(foreign_list)]
+    df_calc["三大法人進出"] = [f"{v:.2f}" for v in total_list]
+    df_calc["三大法人累積進出"] = [f"{v:.2f}" for v in np.cumsum(total_list)]
+
+    df_calc = df_calc.sort_values(by="pure_date", ascending=False).drop(columns=['pure_date']).reset_index(drop=True)
+    return df_calc
+
 # -------------------------------------------------------------------------
-# 3. 自動快取補抓與「僅保留交易日」（多執行緒優化版）
+# 3. 自動快取補抓與「僅保留交易日」
 # -------------------------------------------------------------------------
 def load_or_fetch_90_days_history(seed_name):
     df_cache = local_read_csv()
@@ -154,7 +269,7 @@ def load_or_fetch_90_days_history(seed_name):
             
             if idx_val not in ["", "-", "None"] and not is_closed_day:
                 has_empty_field = False
-                for col in COLUMNS:
+                for col in [c for c in COLUMNS if c not in ["外資累積進出", "三大法人進出", "三大法人累積進出"]]:
                     if col != "日期":
                         val_str = str(row_vals.get(col, "-")).strip()
                         if val_str in ["", "-", "None", "None 億", "None 張", "None 口"]:
@@ -175,7 +290,6 @@ def load_or_fetch_90_days_history(seed_name):
         
         if dates_to_fetch:
             progress_bar = st.progress(0, text="⚡ 正在為您精確回補空缺/遺漏的欄位數據...")
-            
             shared_session = get_robust_session()
 
             def thread_task(dt_str):
@@ -185,7 +299,7 @@ def load_or_fetch_90_days_history(seed_name):
                 if real_data is not None and real_data.get("大盤指數") is not None:
                     row_data = {"日期": add_weekday_to_date_str(dt_str)}
                     for col in COLUMNS:
-                        if col != "日期":
+                        if col not in ["日期", "外資累積進出", "三大法人進出", "三大法人累積進出"]:
                             new_val = real_data.get(col, "-")
                             if new_val in ["", "-", "None", None]:
                                 old_val = cache_dict.get(dt_str, {}).get(col, "-")
@@ -197,7 +311,6 @@ def load_or_fetch_90_days_history(seed_name):
 
             completed = 0
             fetched_results = {}
-            
             with ThreadPoolExecutor(max_workers=5) as executor:
                 future_to_date = {executor.submit(thread_task, d): d for d in dates_to_fetch}
                 for future in as_completed(future_to_date):
@@ -226,9 +339,9 @@ def load_or_fetch_90_days_history(seed_name):
         check_day -= timedelta(days=1)
 
     df_final = pd.DataFrame(final_output)
-    
     if not df_final.empty:
         df_final["日期"] = df_final["日期"].apply(lambda x: add_weekday_to_date_str(x.split("(")[0]))
+        df_final = calculate_institutional_totals(df_final)
         
     local_write_csv(df_final)
     return df_final
@@ -244,9 +357,51 @@ def generate_today_metrics(last_row):
         
     row_data = {"日期": add_weekday_to_date_str(today_str)}
     for col in COLUMNS:
-        if col != "日期":
+        if col not in ["外資累積進出", "三大法人進出", "三大法人累積進出"]:
             row_data[col] = live_data.get(col, "-")
     return row_data
+
+# 自訂 HTML 表格渲染
+def render_custom_html_table(df):
+    html = ['<div class="custom-table-container"><table class="custom-table">']
+    
+    html.append('''
+    <thead>
+        <tr>
+            <th rowspan="2" class="sticky-corner">基本<br>日期</th>
+            <th colspan="3">大盤/期貨</th>
+            <th colspan="6">三大法人進出量</th>
+            <th colspan="5">融資/融券</th>
+            <th colspan="2">未平倉口數</th>
+            <th colspan="2">違約交割金額</th>
+        </tr>
+        <tr>
+            <th>大盤指數</th><th>台指期近一</th><th>大盤成交量(張)</th>
+            <th>外資進出(億)</th><th>外資累積進出(億)</th><th>法人進出(投信)(億)</th><th>自營商進出(億)</th><th>三大法人進出(億)</th><th>三大法人累積進出(億)</th>
+            <th>融資增減(億)</th><th>融資餘額(億)</th><th>借券增減(張)</th><th>借券餘額(張)</th><th>券資比(%)</th>
+            <th>外資未平倉(口)</th><th>自營商未平倉(口)</th>
+            <th>違約合計(百萬)</th><th>違約相抵後(百萬)</th>
+        </tr>
+    </thead>
+    <tbody>
+    ''')
+    
+    for _, row in df.iterrows():
+        html.append('<tr>')
+        date_val = row.get("日期", "-")
+        html.append(f'<td class="date-cell">{date_val}</td>')
+        
+        for col in COLUMNS:
+            if col == "日期": continue
+            val = str(row.get(col, "-")).strip()
+            if val in ["-", "無交易數據", "", "None"]:
+                html.append(f'<td class="nodata-cell">{val}</td>')
+            else:
+                html.append(f'<td class="value-cell">{val}</td>')
+        html.append('</tr>')
+        
+    html.append('</tbody></table></div>')
+    return "".join(html)
 
 # -------------------------------------------------------------------------
 # 4. 全域狀態管理
@@ -266,6 +421,7 @@ def update_and_trim_df(df, new_row_dict):
     else:
         df = pd.concat([pd.DataFrame([new_row_dict]), df], ignore_index=True)
         
+    df = calculate_institutional_totals(df)
     if len(df) > 90: df = df.head(90)
     local_write_csv(df)
     return df
@@ -307,7 +463,6 @@ if sub_tickets:
         df_data = page_info["df"]
         
         with tab:
-            # 調整欄位比例，讓手機上按鈕不折行
             header_col, refresh_col = st.columns([3.5, 1.5])
             with header_col:
                 title_name = "大盤指數" if ticket == "INDEX" else f"{ticket} - {page_info['name']}"
@@ -321,8 +476,19 @@ if sub_tickets:
                     else:
                         st.toast("今日非交易日或尚無開盤數據！", icon="⚠️")
             
+            st.markdown(
+                """
+                🔗 外部延伸數據：
+                <a href="https://www.wantgoo.com/stock/public-bank/trend" target="_blank">🏛️ 公股銀行進出</a>｜
+                <a href="https://www.pscnet.com.tw/pscnetStock/menuContent.do?main_id=386032846c000000ccd145898ac293b6&sub_id=38d642081a00000099f12672f4cf7d6e" target="_blank">📈 整戶融資維持率</a>｜
+                <a href="https://nstatdb.dgbas.gov.tw/dgbasAll/webMain.aspx?sys=100&funid=qryout&funid2=A018201010&outmode=8&ym=11001&ymt=11503&cycle=42&outkind=1&compmode=2.1&ratenm=%u7D71%u8A08%u503C%u53CA%u5E74%u589E%u7387&fldlst=111&codlst0=1111111111111111111&compmode=2.1&rr=q23704x&&rdm=R2632432" target="_blank">📊 國民所得/儲蓄/投資統計</a>
+                """,
+                unsafe_allow_html=True
+            )
+            
             st.write("📋 歷史數據明細（僅顯示交易日）：")
             
+            df_data = calculate_institutional_totals(df_data)
             df_ordered = df_data.reindex(columns=COLUMNS)
             formatted_df = df_ordered.copy()
             
@@ -330,21 +496,8 @@ if sub_tickets:
                 if col != "日期":
                     formatted_df[col] = formatted_df[col].apply(format_cell)
 
-            # 表頭 MultiIndex 結構 (已完全移除公股銀行)
-            multi_cols = pd.MultiIndex.from_tuples([
-                ("基本", "日期"),
-                ("大盤/期貨", "大盤指數"), ("大盤/期貨", "台指期近一"), ("大盤/期貨", "大盤成交量(張)"),
-                ("三大法人進出量", "外資進出(億)"), ("三大法人進出量", "法人進出(投信)(億)"), 
-                ("三大法人進出量", "自營商進出(億)"),
-                ("融資/融券", "融資增減(億)"), ("融資/融券", "融資餘額(億)"), 
-                ("融資/融券", "借券增減(億)"), ("融資/融券", "借券餘額(億)"), ("融資/融券", "券資比(%)"),
-                ("未平倉口數", "外資未平倉(口)"), ("未平倉口數", "自營商未平倉(口)"),
-                ("違約交割金額", "違約合計(百萬)"), ("違約交割金額", "違約相抵後(百萬)")
-            ])
-            formatted_df.columns = multi_cols
-            formatted_df = formatted_df.set_index(("基本", "日期"))
-
-            st.dataframe(formatted_df, use_container_width=True, height=400)
+            table_html = render_custom_html_table(formatted_df)
+            st.markdown(table_html, unsafe_allow_html=True)
             
             st.markdown("---")
             available_metrics = [c for c in COLUMNS if c not in ["日期", "大盤指數"]]
@@ -363,13 +516,43 @@ if sub_tickets:
             
             for i, metric in enumerate(all_plots_to_render):
                 row_idx = i + 1
-                numeric_y = pd.to_numeric(chart_df[metric].astype(str).str.replace(r'[^\d.-]', '', regex=True), errors='coerce')
                 
+                def clean_num(v):
+                    if pd.isna(v) or v is None: return np.nan
+                    v_str = str(v).replace("億", "").replace("張", "").replace("%", "").replace("口", "").replace("百萬", "").replace(",", "").strip()
+                    if v_str in ["", "-", "None", "無交易數據"]: return np.nan
+                    try: return float(v_str)
+                    except: return np.nan
+
+                numeric_y = chart_df[metric].apply(clean_num)
+                x_vals = chart_df["日期"]
+                
+                valid_y = numeric_y.dropna()
+                if not valid_y.empty and valid_y.min() < 0 and valid_y.max() > 0:
+                    y_pos = numeric_y.apply(lambda v: v if (pd.notna(v) and v >= 0) else (0 if pd.notna(v) else np.nan))
+                    y_neg = numeric_y.apply(lambda v: v if (pd.notna(v) and v <= 0) else (0 if pd.notna(v) else np.nan))
+                    
+                    fig.add_trace(
+                        go.Scatter(
+                            x=x_vals, y=y_pos, mode='lines', fill='tozeroy',
+                            fillcolor='rgba(255, 77, 79, 0.25)', line=dict(width=0),
+                            connectgaps=True, showlegend=False, hoverinfo='skip'
+                        ), row=row_idx, col=1
+                    )
+                    fig.add_trace(
+                        go.Scatter(
+                            x=x_vals, y=y_neg, mode='lines', fill='tozeroy',
+                            fillcolor='rgba(82, 196, 26, 0.25)', line=dict(width=0),
+                            connectgaps=True, showlegend=False, hoverinfo='skip'
+                        ), row=row_idx, col=1
+                    )
+
                 fig.add_trace(
                     go.Scatter(
-                        x=chart_df["日期"], y=numeric_y, mode='lines+markers', 
+                        x=x_vals, y=numeric_y, mode='lines', 
                         line=dict(color='#007bff', width=2), name=metric,
-                        hovertemplate=f"<b>%{{x}}</b><br>{metric}: %{{y}} {get_unit_str(metric)}<extra></extra>"
+                        connectgaps=True,
+                        hovertemplate=f"<b>%{{x}}</b><br>{metric}: %{{y:,.2f}} {get_unit_str(metric)}<extra></extra>"
                     ),
                     row=row_idx, col=1
                 )
@@ -381,15 +564,27 @@ if sub_tickets:
                     spikethickness=1, spikecolor="#666666", spikedash="dash",
                     row=row_idx, col=1
                 )
-                fig.update_yaxes(showgrid=True, showspikes=False, row=row_idx, col=1)
+                fig.update_yaxes(
+                    showgrid=True, 
+                    zeroline=True, 
+                    zerolinewidth=2.5, 
+                    zerolinecolor="black", 
+                    showspikes=False, 
+                    row=row_idx, col=1
+                )
             
-            # 手機端圖表佈局與手勢優化
             fig.update_layout(
                 height=160 * num_plots + 50, 
                 margin=dict(l=10, r=10, t=30, b=20), 
                 hovermode="x", 
                 showlegend=False,
-                dragmode=False  # 🔒 關閉拖曳縮放，確保手機網頁滑動順暢不卡住
+                dragmode=False,
+                hoverlabel=dict(
+                    bgcolor="white",
+                    font_size=13,
+                    font_color="#000000",
+                    font_family="Arial, sans-serif, bold"
+                )
             )
             fig.update_traces(xaxis=f"x{num_plots if num_plots > 1 else ''}")
             
@@ -398,27 +593,12 @@ if sub_tickets:
                 annotation['xanchor'] = 'left'
                 annotation['font'] = dict(size=13, color="#000000", family="Arial, sans-serif")
                 
-            # Streamlit 畫圖組件 (啟用 RWD 自適應與滾動手勢保護)
             st.plotly_chart(
                 fig, 
                 use_container_width=True, 
                 config={
-                    'displayModeBar': False, # 隱藏上方放大鏡工具列
-                    'scrollZoom': False,     # 禁用滾輪/手勢縮放
-                    'responsive': True       # 自動適應手機與電腦螢幕
+                    'displayModeBar': False,
+                    'scrollZoom': False,
+                    'responsive': True
                 }
-            )
-
-            # -------------------------------------------------------------------------
-            # 6. 外部數據來源超連結區塊
-            # -------------------------------------------------------------------------
-            st.markdown("---")
-            st.markdown("### 🔗 外部數據來源與延伸參考連結")
-            st.markdown(
-                """
-                - 🏛️ <a href="https://www.wantgoo.com/stock/public-bank/trend" target="_blank">公股銀行進出 trend - 玩股網</a>
-                - 📈 <a href="https://www.pscnet.com.tw/pscnetStock/menuContent.do?main_id=386032846c000000ccd145898ac293b6&sub_id=38d642081a00000099f12672f4cf7d6e" target="_blank">整戶融資維持率 - 統一證券</a>
-                - 📊 <a href="https://nstatdb.dgbas.gov.tw/dgbasAll/webMain.aspx?sys=100&funid=qryout&funid2=A018201010&outmode=8&ym=11001&ymt=11503&cycle=42&outkind=1&compmode=2.1&ratenm=%u7D71%u8A08%u503C%u53CA%u5E74%u589E%u7387&fldlst=111&codlst0=1111111111111111111&compmode=2.1&rr=q23704x&&rdm=R2632432" target="_blank">國民所得、儲蓄與投資統計 - 主計總處</a>
-                """,
-                unsafe_allow_html=True
             )
