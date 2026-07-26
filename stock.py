@@ -25,10 +25,10 @@ st.set_page_config(
 st.markdown("""
     <style>
     .block-container {
-    padding-top: 3.8rem !important;
-    padding-bottom: 2rem !important;
-    padding-left: 0.8rem !important;
-    padding-right: 0.8rem !important;
+        padding-top: 3.8rem !important;
+        padding-bottom: 2rem !important;
+        padding-left: 0.8rem !important;
+        padding-right: 0.8rem !important;
     }
     
     .custom-table-container {
@@ -129,12 +129,12 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 欄位定義
+# 欄位定義（已在 外資未平倉 右側新增 投信未平倉）
 COLUMNS = [
     "日期", "大盤指數", "台指期近一", "大盤成交量", "外資進出", "外資累積進出",
     "法人進出(投信)", "自營商進出", "三大法人進出", "三大法人累積進出",
     "融資增減", "融資餘額", "借券增減", "借券餘額", "券資比", 
-    "外資未平倉", "自營商未平倉", "違約合計總金額", "違約相抵後金額"
+    "外資未平倉", "投信未平倉", "自營商未平倉", "違約合計總金額", "違約相抵後金額"
 ]
 
 STOCK_DB = {
@@ -372,14 +372,14 @@ def render_custom_html_table(df):
             <th colspan="3">大盤/期貨</th>
             <th colspan="6">三大法人進出量</th>
             <th colspan="5">融資/融券</th>
-            <th colspan="2">未平倉口數</th>
+            <th colspan="3">未平倉口數</th>
             <th colspan="2">違約交割金額</th>
         </tr>
         <tr>
             <th>大盤指數</th><th>台指期近一</th><th>大盤成交量(張)</th>
             <th>外資進出(億)</th><th>外資累積進出(億)</th><th>法人進出(投信)(億)</th><th>自營商進出(億)</th><th>三大法人進出(億)</th><th>三大法人累積進出(億)</th>
             <th>融資增減(億)</th><th>融資餘額(億)</th><th>借券增減(張)</th><th>借券餘額(張)</th><th>券資比(%)</th>
-            <th>外資未平倉(口)</th><th>自營商未平倉(口)</th>
+            <th>外資未平倉(口)</th><th>投信未平倉(口)</th><th>自營商未平倉(口)</th>
             <th>違約合計(百萬)</th><th>違約相抵後(百萬)</th>
         </tr>
     </thead>
