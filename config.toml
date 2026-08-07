@@ -1,0 +1,6 @@
+[theme]
+primaryColor = "#4A90E2"          # 設定你喜歡的藍色/灰藍色調作為主色
+backgroundColor = "#FFFFFF"       # 背景顏色
+secondaryBackgroundColor = "#F0F2F6" # 側邊欄或區塊背景色
+textColor = "#262730"             # 文字顏色
+font = "sans serif"
