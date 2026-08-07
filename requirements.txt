@@ -1,7 +1,8 @@
-streamlit
+streamlit>=1.30.0
 pandas
 numpy
 requests
 plotly
+cloudscraper
 beautifulsoup4
-openpyxl
+lxml
