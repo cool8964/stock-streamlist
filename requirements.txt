@@ -1,8 +1,8 @@
-streamlit>=1.30.0
+streamlit
 pandas
 numpy
 requests
-plotly
-cloudscraper
 beautifulsoup4
+yfinance
 lxml
+plotly
