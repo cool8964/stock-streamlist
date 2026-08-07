@@ -877,123 +877,24 @@ if __name__ == "__main__":
     st.set_page_config(layout="wide", page_title="個股單獨測試")
     
     st.markdown("""
-        <style>
-        .block-container {
-            padding-top: 3.8rem !important;
-            padding-bottom: 2rem !important;
-            padding-left: 0.8rem !important;
-            padding-right: 0.8rem !important;
-        }
-        
-        .custom-table-container {
-            width: 100%;
-            overflow-x: auto;
-            max-height: 450px;
-            overflow-y: auto;
-            border: 1px solid #dcdcdc;
-            border-radius: 4px;
-            margin-bottom: 0.8rem;
-            position: relative;
-        }
-        .custom-table {
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            font-size: 14px;
-            white-space: nowrap;
-        }
-        
-        .custom-table th {
-            position: sticky;
-            top: 0;
-            background-color: #f0f0f0 !important;
-            color: #111111 !important;
-            font-weight: bold !important;
-            border: 1px solid #dcdcdc;
-            padding: 8px 10px;
-            text-align: center;
-            z-index: 2;
-        }
-        .custom-table tr:nth-child(2) th {
-            top: 35px;
-            border-bottom: 2.5px solid #333333 !important;
-        }
-        
-        .custom-table th.sticky-corner {
-            position: sticky;
-            top: 0;
-            left: 0;
-            z-index: 3 !important;
-            background-color: #e5e5e5 !important;
-            border-right: 2.5px solid #333333 !important;
-        }
-
-        .custom-table td.date-cell {
-            position: sticky;
-            left: 0;
-            background-color: #f5f5f5 !important;
-            color: #000000 !important;
-            font-weight: bold !important;
-            border: 1px solid #e0e0e0;
-            border-right: 2.5px solid #333333 !important;
-            padding: 8px 10px;
-            z-index: 1;
-            text-align: center;
-        }
-
-        .custom-table td.value-cell {
-            color: #111111;
-            font-weight: bold !important;
-            border: 1px solid #eeeeee;
-            padding: 8px 10px;
-            text-align: right;
-        }
-
-        .custom-table td.value-cell.pos-val {
-            color: #d32f2f !important;
-        }
-        .custom-table td.value-cell.neg-val {
-            color: #2e7d32 !important;
-        }
-
-        .custom-table td.nodata-cell {
-            color: #888888 !important;
-            font-weight: normal !important;
-            border: 1px solid #eeeeee;
-            padding: 8px 10px;
-            text-align: center;
-        }
-        .custom-table tr:hover td {
-            background-color: #f7f7f7 !important;
-        }
-
-        .bg-pink { background-color: #f8d7da !important; }
-        .bg-light-green { background-color: #d4edda !important; }
-
-        span[data-baseweb="tag"],
-        div[data-baseweb="tag"] {
-            background-color: #dce6f1 !important;
-            border: 1px solid #c2d3e4 !important;
-            border-radius: 6px !important;
-        }
-
-        span[data-baseweb="tag"] *,
-        div[data-baseweb="tag"] * {
-            background-color: transparent !important;
-            border: none !important;
-            outline: none !important;
-            box-shadow: none !important;
-            color: #334155 !important;
-            fill: #475569 !important;
-        }
-
-        span[data-baseweb="tag"] svg:hover,
-        div[data-baseweb="tag"] svg:hover {
-            fill: #1e293b !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
+    <style>
+    /* 確保個股頁面的自訂表格與顏色強制生效 */
+    .custom-table td.pos-val {
+        color: #d32f2f !important;
+    }
+    .custom-table td.neg-val {
+        color: #2e7d32 !important;
+    }
+    .custom-table td.bg-pink {
+        background-color: #f8d7da !important;
+        color: #842029 !important;
+    }
+    .custom-table td.bg-light-green {
+        background-color: #d4edda !important;
+        color: #0f5132 !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
     st.title("🧪 Individual 模組獨立測試環境")
 
